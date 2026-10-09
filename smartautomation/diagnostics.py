@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import importlib.util
-import platform
 import shutil
 import subprocess
 import sys
@@ -20,7 +19,7 @@ class Check:
 def check_readiness(config: UfoConfig | None = None) -> dict:
     config = config or UfoConfig.from_environment()
     checks: list[Check] = []
-    checks.append(Check("windows", sys.platform == "win32", platform.platform()))
+    checks.append(Check("windows", sys.platform == "win32", sys.platform))
     problems = config.validate()
     checks.append(Check("ufo_source", not problems, str(config.root) if not problems else "; ".join(problems)))
     checks.append(Check("python", sys.version_info >= (3, 10), sys.version.split()[0]))
