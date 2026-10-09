@@ -1,0 +1,30 @@
+name: Windows Preflight
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  windows-offline:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline Python contract tests
+        run: python -m unittest discover -s tests -v
+      - name: Read-only diagnostics (UFO not installed on runner)
+        shell: pwsh
+        run: |
+          python -m smartautomation
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate test script PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/test-notepad.ps1", [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) { $parseErrors | Format-List; exit 1 }
+          Write-Host "PowerShell syntax valid; no desktop automation executed."
