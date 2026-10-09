@@ -7,6 +7,7 @@ from starlette.requests import Request
 
 from smartautomation import __version__
 from smartautomation.ufo import UfoConfig
+from smartautomation.diagnostics import check_readiness
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -29,3 +30,8 @@ def status():
         "execution_api_available": False,
         "notes": problems or ["UFO detected; desktop execution via local CLI requires explicit opt-in"],
     }
+
+@app.get("/api/readiness")
+def readiness():
+    """Read-only machine diagnostics; does not execute UFO or expose credentials."""
+    return check_readiness()
