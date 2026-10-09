@@ -44,3 +44,19 @@ The API intentionally exposes no /run endpoint at this stage, and is only for lo
 - Use the upstream demonstration/experience subsystems rather than reinventing their internals.
 - Add a controlled job lifecycle, cancel mechanism and task verification before enabling chat-driven desktop execution.
 - Only then develop a React UI and skill teaching flow.
+
+## Read-only diagnostics
+
+After cloning and installing dependencies, run:
+
+```powershell
+python -m smartautomation
+```
+
+Or start the status server and open `http://127.0.0.1:8765/api/readiness`.
+This checks the source, Python, Windows and key installed packages **without**
+starting UFO or controlling the desktop.
+
+A positive result is only a prerequisite, **not** proof that model credentials,
+GUI control, task execution or cancellation work. Do not use production CMIS data
+until live Windows acceptance tests have passed.
