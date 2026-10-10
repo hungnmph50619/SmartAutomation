@@ -22,14 +22,14 @@ MAX_ARCHIVE_INPUT_BYTES = 300 * 1024 * 1024
 TEXT_SUFFIXES = {".log", ".md", ".txt", ".json", ".jsonl", ".csv", ".yaml", ".yml"}
 EXCLUDED_NAMES = {"agents.yaml", ".env", "credentials.json", "token.json", "secrets.json", "api_keys.json"}
 SECRET_PATTERNS = (
-    re.compile(r'(?i)(["\x27]?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|password|client_secret)["\x27]?\s*[:=]\s*["\x27]?)([^\s,"\x27}]+)'),
+    re.compile(r'(?i)(["\x27]?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|client_secret)["\x27]?\s*[:=]\s*["\x27]?)([^\s,"\x27}]+)'),
     re.compile(r"(?i)(Bearer\s+)[A-Za-z0-9._~+/-]+"),
     re.compile(r"AIza[0-9A-Za-z_-]{25,}"),
 )
 
 
 def redact(content: str) -> str:
-    content = re.sub(r"(?i)(Authorization\\s*[:=]\\s*Bearer\\s+)[A-Za-z0-9._~+/-]+", r"\\1[REDACTED]", content)
+    content = re.sub(r"(?im)^([ \\t]*Authorization\\s*[:=]\\s*)[^\\r\\n]+", r"\\1[REDACTED]", content)
     for pattern in SECRET_PATTERNS:
         if pattern.groups == 2:
             content = pattern.sub(lambda match: match.group(1) + "[REDACTED]", content)
