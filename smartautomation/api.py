@@ -16,7 +16,7 @@ from smartautomation.export_diagnostics import export
 from smartautomation.app_discovery import discover_start_apps, find_app
 from smartautomation.progress import summarize
 from smartautomation.screenshots import list_images, image_file
-from smartautomation.recovery import recommend_apps
+from smartautomation.recovery import recommend_apps, recovery_instructions
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -153,3 +153,22 @@ def recovery_advice(job_id: str, app_name: str = ""):
     except (OSError, ValueError, RuntimeError):
         return {"status": "discovery_unavailable", "candidates": [], "next_step": "inspect_ufo_logs"}
     return recommend_apps(app_name, apps, breaker)
+
+@app.get("/api/jobs/{job_id}/recovery/plan")
+def recovery_plan(job_id: str, app_name: str = ""):
+    """Return a proposed recovery instruction; NEVER launches an application."""
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Current job not found")
+    if not 1 <= len(app_name.strip()) <= 100:
+        raise HTTPException(400, "Application name required")
+    breaker = summarize(UfoConfig.from_environment().root, "smartautomation-" + job_id[:8])["circuit_breaker"]
+    if breaker["state"] != "suspected_repeat" or breaker["reason_code"] != "launch_not_found":
+        return {"status": "not_allowed", "instruction": None}
+    try:
+        candidates = find_app(app_name, discover_start_apps())
+    except (OSError, ValueError, RuntimeError):
+        raise HTTPException(503, "Windows app discovery unavailable") from None
+    if not candidates:
+        return {"status": "no_candidate", "instruction": None}
+    return recovery_instructions(candidates[0], breaker)
