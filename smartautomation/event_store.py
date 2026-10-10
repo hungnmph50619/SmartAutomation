@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import sqlite3
@@ -31,8 +32,14 @@ class EventStore:
             )""")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_job ON events(job_id,id)")
 
+    @contextmanager
     def _connect(self):
-        return sqlite3.connect(self.path, timeout=10)
+        connection = sqlite3.connect(self.path, timeout=10)
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def emit(self, job_id: str, kind: str, metadata: dict | None = None) -> None:
         if kind not in ALLOWED_EVENTS:
