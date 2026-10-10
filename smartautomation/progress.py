@@ -11,7 +11,7 @@ import time
 
 TASK_RE = re.compile(r"^smartautomation-[0-9a-f]{8}$")
 IMAGE_RE = re.compile(r"^action_[A-Za-z0-9_]+\.png$")
-REPEAT_RE = re.compile(r"(?i)(file not found|command blocked by security policy|access denied)")
+from smartautomation.failure_breaker import detect_repetition
 MAX_TAIL = 24000
 
 
@@ -21,7 +21,8 @@ def summarize(root: Path, task: str, now: float | None = None) -> dict:
     directory = root / "logs" / task
     if not directory.is_dir() or directory.is_symlink():
         return {"step_count": 0, "latest_image": None, "last_activity": None,
-                "seconds_since_activity": None, "warning": None}
+                "seconds_since_activity": None, "warning": None,
+                "circuit_breaker": detect_repetition("")}
     files = [p for p in directory.iterdir() if p.is_file() and not p.is_symlink()]
     images = [p for p in files if IMAGE_RE.fullmatch(p.name)]
     latest = max(images, key=lambda p: p.stat().st_mtime, default=None)
@@ -30,19 +31,20 @@ def summarize(root: Path, task: str, now: float | None = None) -> dict:
     age = max(0, int((now if now is not None else time.time()) - last)) if last is not None else None
     warning = "no_recent_evidence" if age is not None and age >= 60 else None
 
-    repeated = False
+    circuit = detect_repetition("")
     response = directory / "response.log"
     if response.is_file() and response.stat().st_size <= 8_000_000:
         with response.open("rb") as handle:
             handle.seek(max(0, response.stat().st_size - MAX_TAIL))
             raw = handle.read(MAX_TAIL)
         text = raw.decode("utf-8", errors="replace")
-        repeated = len(REPEAT_RE.findall(text)) >= 3
+        circuit = detect_repetition(text)
 
     return {
         "step_count": len(images),
         "latest_image": latest.name if latest else None,
         "last_activity": last,
         "seconds_since_activity": age,
-        "warning": "repeated_launch_error" if repeated else warning,
+        "warning": "repeated_launch_error" if circuit["state"] == "suspected_repeat" else warning,
+        "circuit_breaker": circuit,
     }
