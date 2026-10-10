@@ -14,6 +14,7 @@ from smartautomation.diagnostics import check_readiness
 from smartautomation.jobs import manager
 from smartautomation.export_diagnostics import export
 from smartautomation.app_discovery import discover_start_apps, find_app
+from smartautomation.progress import summarize
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -103,3 +104,11 @@ def job_events(job_id: str):
     if current["job_id"] != job_id:
         raise HTTPException(404, "Current job not found")
     return {"events": manager.events.list_events(job_id)}
+
+@app.get("/api/jobs/{job_id}/progress")
+def job_progress(job_id: str):
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Current job not found")
+    config = UfoConfig.from_environment()
+    return summarize(config.root, "smartautomation-" + job_id[:8])
