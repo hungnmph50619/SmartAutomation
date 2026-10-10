@@ -18,6 +18,7 @@ from smartautomation.progress import summarize
 from smartautomation.screenshots import list_images, image_file
 from smartautomation.recovery import recommend_apps, recovery_instructions
 from smartautomation.recovery_gate import evaluate_gate
+from smartautomation.ufo_compatibility import inspect_current
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -212,3 +213,9 @@ def recovery_gate(job_id: str):
     decision = evaluate_gate(progress, current["state"])
     return {"state": decision.state, "reason": decision.reason,
             "can_auto_resume": decision.can_auto_resume}
+
+
+@app.get("/api/ufo/compatibility")
+def ufo_compatibility():
+    """Read-only source compatibility. Never enables experimental hooks."""
+    return inspect_current()
