@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from pydantic import BaseModel, Field
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
@@ -11,6 +12,7 @@ from smartautomation import __version__
 from smartautomation.ufo import UfoConfig
 from smartautomation.diagnostics import check_readiness
 from smartautomation.jobs import manager
+from smartautomation.export_diagnostics import export
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -69,3 +71,16 @@ def stop_job(job_id: str):
         return manager.stop(job_id)
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from None
+
+@app.post("/api/jobs/{job_id}/export")
+def export_job(job_id: str):
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Job not found")
+    if current["state"] in {"starting", "running", "stopping"}:
+        raise HTTPException(409, "Wait for job to finish before exporting diagnostics")
+    try:
+        archive = export("smartautomation-" + job_id[:8])
+    except (OSError, ValueError) as exc:
+        raise HTTPException(409, f"Diagnostic export failed: {exc}") from None
+    return {"filename": archive.name, "saved_to": "Desktop"}
