@@ -14,6 +14,8 @@ import uuid
 from dataclasses import dataclass, field
 
 from smartautomation.ufo import UfoConfig, build_command
+from smartautomation.event_store import EventStore
+from smartautomation.telemetry import trace_phase
 
 MAX_SECONDS = 900
 
@@ -32,6 +34,7 @@ class Job:
 class JobManager:
     def __init__(self):
         self._lock = threading.RLock()
+        self.events = EventStore()
         self._job: Job | None = None
 
     def snapshot(self) -> dict:
@@ -67,6 +70,7 @@ class JobManager:
                 raise RuntimeError("Another desktop task is already running")
             job = Job(str(uuid.uuid4()), "starting", time.time())
             self._job = job
+            self.events.emit(job.id, "created")
             command = build_command(config, "smartautomation-" + job.id[:8], request.strip())
             try:
                 # UFO owns all OS interactions. Never use a shell or log model output here.
@@ -79,9 +83,11 @@ class JobManager:
                     creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
                 )
             except Exception:
+                self.events.emit(job.id, "failed", {"reason_code": "spawn_failed"})
                 self._job = None
                 raise
             job.state = "running"
+            self.events.emit(job.id, "running")
             job.detail = "UFO running; details remain in UFO's local logs"
             thread = threading.Thread(target=self._watch, args=(job,), daemon=True)
             thread.start()
@@ -90,11 +96,13 @@ class JobManager:
     def _watch(self, job: Job):
         assert job.process is not None
         try:
-            rc = job.process.wait(timeout=MAX_SECONDS)
+            with trace_phase("ufo.process.wait", job_id=job.id, phase="running"):
+                rc = job.process.wait(timeout=MAX_SECONDS)
         except subprocess.TimeoutExpired:
             with self._lock:
                 job.stop_requested = True
                 job.state = "stopping"
+                self.events.emit(job.id, "timeout")
                 job.detail = "Time limit reached: stopping UFO"
             self._terminate_tree(job.process)
             rc = job.process.wait()
@@ -102,6 +110,7 @@ class JobManager:
             job.returncode = rc
             job.state = "stopped" if job.stop_requested else ("finished" if rc == 0 else "failed")
             job.detail = "UFO process exited; check UFO logs for independently verified outcome"
+            self.events.emit(job.id, job.state, {"returncode": rc})
 
     @staticmethod
     def _terminate_tree(process: subprocess.Popen):
@@ -131,6 +140,7 @@ class JobManager:
                 return self.snapshot()
             job.stop_requested = True
             job.state = "stopping"
+            self.events.emit(job.id, "stopping")
             job.detail = "Stop requested; terminating UFO process tree"
             process = job.process
         if process is not None:
