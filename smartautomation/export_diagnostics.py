@@ -29,7 +29,7 @@ SECRET_PATTERNS = (
 
 
 def redact(content: str) -> str:
-    content = re.sub(r"(?im)^([ \\t]*Authorization\\s*[:=]\\s*)[^\\r\\n]+", r"\\1[REDACTED]", content)
+    content = re.sub(r"(?im)^([ \t]*Authorization\s*[:=]\s*)[^\r\n]+", r"\1[REDACTED]", content)
     for pattern in SECRET_PATTERNS:
         if pattern.groups == 2:
             content = pattern.sub(lambda match: match.group(1) + "[REDACTED]", content)
