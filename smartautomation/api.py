@@ -15,6 +15,7 @@ from smartautomation.jobs import manager
 from smartautomation.export_diagnostics import export
 from smartautomation.app_discovery import discover_start_apps, find_app
 from smartautomation.progress import summarize
+from smartautomation.screenshots import list_images, image_file
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -112,3 +113,22 @@ def job_progress(job_id: str):
         raise HTTPException(404, "Current job not found")
     config = UfoConfig.from_environment()
     return summarize(config.root, "smartautomation-" + job_id[:8])
+
+@app.get("/api/jobs/{job_id}/screenshots")
+def screenshots(job_id: str):
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Current job not found")
+    return {"images": list_images(UfoConfig.from_environment().root, "smartautomation-" + job_id[:8])}
+
+
+@app.get("/api/jobs/{job_id}/screenshots/{filename}")
+def screenshot(job_id: str, filename: str):
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Current job not found")
+    try:
+        file = image_file(UfoConfig.from_environment().root, "smartautomation-" + job_id[:8], filename)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(404, "Screenshot not found") from None
+    return FileResponse(file, media_type="image/png", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
