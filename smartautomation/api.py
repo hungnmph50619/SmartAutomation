@@ -16,6 +16,7 @@ from smartautomation.export_diagnostics import export
 from smartautomation.app_discovery import discover_start_apps, find_app
 from smartautomation.progress import summarize
 from smartautomation.screenshots import list_images, image_file
+from smartautomation.recovery import recommend_apps
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -132,3 +133,23 @@ def screenshot(job_id: str, filename: str):
     except (ValueError, FileNotFoundError):
         raise HTTPException(404, "Screenshot not found") from None
     return FileResponse(file, media_type="image/png", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+@app.get("/api/jobs/{job_id}/recovery")
+def recovery_advice(job_id: str, app_name: str = ""):
+    """Advice only: never runs commands or bypasses UFO's security policy."""
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Current job not found")
+    if len(app_name) > 100:
+        raise HTTPException(400, "Application name too long")
+    status = summarize(UfoConfig.from_environment().root, "smartautomation-" + job_id[:8])
+    breaker = status["circuit_breaker"]
+    if breaker["state"] != "suspected_repeat":
+        return recommend_apps(app_name, [], breaker)
+    if not app_name.strip():
+        return {"status": "application_name_required", "candidates": [], "next_step": "provide_application_name"}
+    try:
+        apps = discover_start_apps()
+    except (OSError, ValueError, RuntimeError):
+        return {"status": "discovery_unavailable", "candidates": [], "next_step": "inspect_ufo_logs"}
+    return recommend_apps(app_name, apps, breaker)
