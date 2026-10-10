@@ -172,3 +172,32 @@ def recovery_plan(job_id: str, app_name: str = ""):
     if not candidates:
         return {"status": "no_candidate", "instruction": None}
     return recovery_instructions(candidates[0], breaker)
+
+class RecoveryRetryRequest(BaseModel):
+    app_name: str = Field(min_length=1, max_length=100)
+    confirmed: bool = False
+
+
+@app.post("/api/jobs/{job_id}/recovery/retry")
+def retry_recovery(job_id: str, body: RecoveryRetryRequest):
+    """User-authorized NEW UFO task only; never execute launch commands ourselves."""
+    if not body.confirmed:
+        raise HTTPException(403, "Separate retry confirmation required")
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Current task not found")
+    if current["state"] != "failed":
+        raise HTTPException(409, "Only failed tasks can be retried")
+    breaker = summarize(UfoConfig.from_environment().root, "smartautomation-" + job_id[:8])["circuit_breaker"]
+    if breaker["state"] != "suspected_repeat" or breaker["reason_code"] != "launch_not_found":
+        raise HTTPException(409, "No supported launch-not-found recovery evidence")
+    try:
+        candidates = discover_start_apps()
+        exact = next((app for app in candidates if app["name"].casefold() == body.app_name.strip().casefold()), None)
+        if exact is None:
+            raise HTTPException(409, "Confirmed application not found in Windows Start Menu")
+        return manager.retry_from_failed(job_id, exact["name"], body.confirmed)
+    except (OSError, ValueError, RuntimeError, PermissionError) as exc:
+        raise HTTPException(409, str(exc)) from None
+    except LookupError:
+        raise HTTPException(404, "Original task no longer available") from None
