@@ -1,0 +1,22 @@
+name: SmartAutomation UI Build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck and build
+        run: npm run build
