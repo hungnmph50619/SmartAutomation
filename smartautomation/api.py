@@ -13,6 +13,7 @@ from smartautomation.ufo import UfoConfig
 from smartautomation.diagnostics import check_readiness
 from smartautomation.jobs import manager
 from smartautomation.export_diagnostics import export
+from smartautomation.app_discovery import discover_start_apps, find_app
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -84,3 +85,21 @@ def export_job(job_id: str):
     except (OSError, ValueError) as exc:
         raise HTTPException(409, f"Diagnostic export failed: {exc}") from None
     return {"filename": archive.name, "saved_to": "Desktop"}
+
+@app.get("/api/apps/discover")
+def discover_apps(query: str = ""):
+    """Read-only Windows Start Menu discovery. Never launches an app."""
+    if not 1 <= len(query.strip()) <= 100:
+        raise HTTPException(400, "Provide an application name (1..100 chars)")
+    try:
+        return {"candidates": find_app(query, discover_start_apps())}
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise HTTPException(503, "App discovery unavailable") from None
+
+
+@app.get("/api/jobs/{job_id}/events")
+def job_events(job_id: str):
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Current job not found")
+    return {"events": manager.events.list_events(job_id)}
