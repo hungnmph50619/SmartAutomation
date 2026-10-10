@@ -17,6 +17,7 @@ from smartautomation.app_discovery import discover_start_apps, find_app
 from smartautomation.progress import summarize
 from smartautomation.screenshots import list_images, image_file
 from smartautomation.recovery import recommend_apps, recovery_instructions
+from smartautomation.recovery_gate import evaluate_gate
 
 app = FastAPI(title="SmartAutomation", version=__version__)
 
@@ -201,3 +202,13 @@ def retry_recovery(job_id: str, body: RecoveryRetryRequest):
         raise HTTPException(409, str(exc)) from None
     except LookupError:
         raise HTTPException(404, "Original task no longer available") from None
+
+@app.get("/api/jobs/{job_id}/gate")
+def recovery_gate(job_id: str):
+    current = manager.snapshot()
+    if current["job_id"] != job_id:
+        raise HTTPException(404, "Current job not found")
+    progress = summarize(UfoConfig.from_environment().root, "smartautomation-" + job_id[:8])
+    decision = evaluate_gate(progress, current["state"])
+    return {"state": decision.state, "reason": decision.reason,
+            "can_auto_resume": decision.can_auto_resume}
