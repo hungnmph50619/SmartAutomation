@@ -29,6 +29,7 @@ class Job:
     detail: str = ""
     returncode: int | None = None
     stop_requested: bool = False
+    request: str = field(default="", repr=False)
 
 
 class JobManager:
@@ -68,7 +69,7 @@ class JobManager:
         with self._lock:
             if self._job and self._job.state in {"starting", "running", "stopping"}:
                 raise RuntimeError("Another desktop task is already running")
-            job = Job(str(uuid.uuid4()), "starting", time.time())
+            job = Job(str(uuid.uuid4()), "starting", time.time(), request=request.strip())
             self._job = job
             self.events.emit(job.id, "created")
             command = build_command(config, "smartautomation-" + job.id[:8], request.strip())
@@ -111,6 +112,32 @@ class JobManager:
             job.state = "stopped" if job.stop_requested else ("finished" if rc == 0 else "failed")
             job.detail = "UFO process exited; check UFO logs for independently verified outcome"
             self.events.emit(job.id, job.state, {"returncode": rc})
+
+    def retry_from_failed(self, job_id: str, app_name: str, confirmed: bool) -> dict:
+        """Start a NEW approved UFO job, never execute desktop commands here."""
+        if not confirmed:
+            raise PermissionError("Separate confirmation required for retry")
+        if not app_name or len(app_name) > 100 or any(ch in app_name for ch in "\\r\\n\\x00"):
+            raise ValueError("Invalid application name")
+        with self._lock:
+            previous = self._job
+            if previous is None or previous.id != job_id:
+                raise LookupError("Previous task not found")
+            if previous.state != "failed":
+                raise RuntimeError("Recovery retry allowed only after a failed task")
+            original = previous.request
+            if not original:
+                raise RuntimeError("Original task request unavailable")
+            instruction = (
+                "Lưu ý phục hồi ứng dụng: thử mở ứng dụng qua giao diện Windows Start Menu, "
+                "không lặp lại lệnh shell từng thất bại, không vô hiệu hóa chính sách bảo mật; "
+                "xác minh cửa sổ đã mở trước khi thao tác. "
+                "Ứng dụng được xác nhận: " + app_name + ". "
+            )
+            if len(instruction + original) > 2000:
+                raise ValueError("Task request too long for safe retry")
+            # start() takes the same RLock and again enforces explicit opt-in.
+            return self.start(instruction + original, confirmed=True)
 
     @staticmethod
     def _terminate_tree(process: subprocess.Popen):
