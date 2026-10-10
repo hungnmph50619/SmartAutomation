@@ -117,7 +117,7 @@ class JobManager:
         """Start a NEW approved UFO job, never execute desktop commands here."""
         if not confirmed:
             raise PermissionError("Separate confirmation required for retry")
-        if not app_name or len(app_name) > 100 or any(ch in app_name for ch in "\\r\\n\\x00"):
+        if not app_name or len(app_name) > 100 or any(ord(ch) < 32 for ch in app_name):
             raise ValueError("Invalid application name")
         with self._lock:
             previous = self._job
