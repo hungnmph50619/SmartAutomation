@@ -44,9 +44,9 @@ class UfoCompatibilityTests(unittest.TestCase):
             three = root / "ufo/module/dispatcher.py"
             for file in (one, two, three):
                 file.parent.mkdir(parents=True, exist_ok=True)
-            one.write_text("class ProcessorTemplate:\\n async def process(self):\\n  await phase.execute()\\n")
-            two.write_text("class HostActionExecutionStrategy:\\n async def execute(self, agent, ctx): pass\\n async def _execute_generic_command(self, response, dispatcher): pass\\n")
-            three.write_text("class BasicCommandDispatcher:\\n async def execute_commands(self, commands): pass\\n")
+            one.write_text("class ProcessorTemplate:\n async def process(self):\n  await phase.execute()\n")
+            two.write_text("class HostActionExecutionStrategy:\n async def execute(self, agent, ctx): pass\n async def _execute_generic_command(self, response, dispatcher): pass\n")
+            three.write_text("class BasicCommandDispatcher:\n async def execute_commands(self, commands): pass\n")
             result = inspect_ufo_hooks(root)
             self.assertTrue(result["command_dispatcher_detected"])
             self.assertTrue(result["host_generic_command_detected"])
