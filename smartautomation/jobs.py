@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from smartautomation.ufo import UfoConfig, build_command
 from smartautomation.event_store import EventStore
@@ -74,15 +75,19 @@ class JobManager:
             self.events.emit(job.id, "created")
             command = build_command(config, "smartautomation-" + job.id[:8], request.strip())
             try:
+                log_dir = Path(os.environ.get('SMARTAUTOMATION_PROCESS_LOGS', str(Path.home() / '.smartautomation' / 'process_logs')))
+                log_dir.mkdir(parents=True, exist_ok=True)
+                log_base = 'smartautomation-' + job.id[:8]
                 # UFO owns all OS interactions. Never use a shell or log model output here.
-                job.process = subprocess.Popen(
-                    command,
-                    cwd=str(config.root),
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-                )
+                with open(log_dir / (log_base + '.stdout.log'), 'ab') as out, open(log_dir / (log_base + '.stderr.log'), 'ab') as err:
+                    job.process = subprocess.Popen(
+                        command,
+                        cwd=str(config.root),
+                        stdin=subprocess.DEVNULL,
+                        stdout=out,
+                        stderr=err,
+                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                    )
             except Exception:
                 self.events.emit(job.id, "failed", {"reason_code": "spawn_failed"})
                 self._job = None
