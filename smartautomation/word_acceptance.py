@@ -23,8 +23,8 @@ def assess(task: str, root: Path | None = None) -> dict:
     # Report wording varies by UFO/model version. These are indicators rather
     # than a verdict on the contents of any Word file.
     patterns = {
-        "application_launch_failed": r"(?i)(could not|unable to|failed to|cannot|can't)\\s+(?:be\\s+)?(?:launch|open|start)(?:ed)?|(?:launch|opening)\\s+(?:of\\s+)?(?:microsoft\\s+)?word\\s+failed",
-        "task_failed": r"(?i)\\b(?:task|mission|operation)\\s+(?:has\\s+)?failed\\b|\\bfailed\\s+(?:task|mission)\\b",
+        "application_launch_failed": r"(?i)(could not|unable to|failed to|cannot|can't)\s+(?:be\s+)?(?:launch|open|start)(?:ed)?|(?:launch|opening)\s+(?:of\s+)?(?:microsoft\s+)?word\s+failed",
+        "task_failed": r"(?i)\b(?:task|mission|operation)\s+(?:has\s+)?failed\b|\bfailed\s+(?:task|mission)\b",
         "file_not_found": r"(?i)file not found|no such file or directory|not recognized as (?:an? )?(?:internal|external) command",
         "security_blocked": r"(?i)blocked by security|security polic(?:y|ies).*block",
         "no_document": r"(?i)no document was (?:created|modified|saved)",
