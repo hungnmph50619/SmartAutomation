@@ -10,6 +10,8 @@ import sys
 from smartautomation.ufo import UfoConfig
 from smartautomation.ufo_compatibility import inspect_ufo_hooks
 from smartautomation.app_discovery import discover_start_apps, find_app
+from smartautomation.windows_ui_capability import inspect_windows_ui
+from smartautomation.hardware_capability import classify_hardware_server
 
 
 def collect(app_query: str = "Word") -> dict:
@@ -21,6 +23,8 @@ def collect(app_query: str = "Word") -> dict:
         "ufo_detected": installed,
         "ufo_root": str(config.root),
         "ufo_hooks": inspect_ufo_hooks(config.root),
+        "windows_ui": inspect_windows_ui(config.root),
+        "hardware_server": classify_hardware_server(config.root),
         "application_query": app_query,
         "applications": [],
         "discovery_status": "not_run",
