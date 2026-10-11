@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import socket
 from smartautomation.ufo import UfoConfig
+from smartautomation.hardware_capability import classify_hardware_server
 
 
 def hardware_endpoint(root: Path) -> dict:
@@ -41,14 +42,15 @@ def hardware_endpoint(root: Path) -> dict:
 
 def probe(root: Path, timeout: float = 1.5) -> dict:
     endpoint = hardware_endpoint(root)
+    implementation = classify_hardware_server(root)
     if endpoint.get("status") != "configured":
-        return {"endpoint": endpoint, "tcp_status": "not_tested", "mcp_verified": False}
+        return {"endpoint": endpoint, "tcp_status": "not_tested", "mcp_verified": False, "implementation": implementation}
     try:
         with socket.create_connection((endpoint["host"], endpoint["port"]), timeout=timeout):
             tcp = "listening"
     except (ConnectionError, TimeoutError, OSError):
         tcp = "not_reachable"
-    return {"endpoint": endpoint, "tcp_status": tcp, "mcp_verified": False}
+    return {"endpoint": endpoint, "tcp_status": tcp, "mcp_verified": False, "implementation": implementation}
 
 
 def main() -> int:
