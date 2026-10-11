@@ -36,6 +36,23 @@ class UfoCompatibilityTests(unittest.TestCase):
             self.assertTrue(probe["processor_middleware_detected"])
             self.assertFalse(probe["action_guard_supported"])
 
+    def test_dispatcher_boundary_is_evidence_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            one = root / "ufo/agents/processors/core/processor_framework.py"
+            two = root / "ufo/agents/processors/strategies/host_agent_processing_strategy.py"
+            three = root / "ufo/module/dispatcher.py"
+            for file in (one, two, three):
+                file.parent.mkdir(parents=True, exist_ok=True)
+            one.write_text("class ProcessorTemplate:\\n async def process(self):\\n  await phase.execute()\\n")
+            two.write_text("class HostActionExecutionStrategy:\\n async def execute(self, agent, ctx): pass\\n async def _execute_generic_command(self, response, dispatcher): pass\\n")
+            three.write_text("class BasicCommandDispatcher:\\n async def execute_commands(self, commands): pass\\n")
+            result = inspect_ufo_hooks(root)
+            self.assertTrue(result["command_dispatcher_detected"])
+            self.assertTrue(result["host_generic_command_detected"])
+            self.assertIsNotNone(result["candidate_boundary"])
+            self.assertFalse(result["action_guard_supported"])
+
     def test_unknown_structure_stays_disabled(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
