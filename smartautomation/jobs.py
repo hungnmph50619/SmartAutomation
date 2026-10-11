@@ -21,6 +21,15 @@ from smartautomation.telemetry import trace_phase
 MAX_SECONDS = 900
 
 
+def ufo_process_environment(base: dict[str, str] | None = None) -> dict[str, str]:
+    """Set UTF-8 child output without changing the parent or UFO logic."""
+    env = dict(os.environ if base is None else base)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    return env
+
+
+
 @dataclass
 class Job:
     id: str
@@ -86,6 +95,7 @@ class JobManager:
                         stdin=subprocess.DEVNULL,
                         stdout=out,
                         stderr=err,
+                        env=ufo_process_environment(),
                         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
                     )
             except Exception:
