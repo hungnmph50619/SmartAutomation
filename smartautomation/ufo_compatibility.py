@@ -36,6 +36,19 @@ def inspect_ufo_hooks(root: Path) -> dict:
         return {"available": False, "action_guard_supported": False, "reason": "expected_methods_missing"}
     before = [n for n in ast.walk(process) if isinstance(n, ast.Attribute) and n.attr == "before_process"]
     execute = [n for n in ast.walk(process) if isinstance(n, ast.Attribute) and n.attr == "execute"]
+    dispatcher_file = root / "ufo/module/dispatcher.py"
+    dispatcher_present = False
+    if dispatcher_file.is_file():
+        try:
+            dispatcher_tree = ast.parse(dispatcher_file.read_text(encoding="utf-8-sig"))
+            dispatcher_present = any(
+                isinstance(node, ast.ClassDef) and node.name == "BasicCommandDispatcher"
+                and _method(node, "execute_commands") is not None
+                for node in dispatcher_tree.body
+            )
+        except (SyntaxError, UnicodeError, OSError):
+            pass
+    generic_command_method = _method(host, "_execute_generic_command")
     # The observed before_process middleware is processor-wide. There is no
     # demonstrated per-action interception contract, so fail closed.
     return {
@@ -43,6 +56,9 @@ def inspect_ufo_hooks(root: Path) -> dict:
         "processor_middleware_detected": bool(before),
         "processing_phase_execution_detected": bool(execute),
         "host_action_strategy_detected": True,
+        "host_generic_command_detected": generic_command_method is not None,
+        "command_dispatcher_detected": dispatcher_present,
+        "candidate_boundary": "HostActionExecutionStrategy._execute_generic_command -> BasicCommandDispatcher.execute_commands" if generic_command_method is not None and dispatcher_present else None,
         "action_guard_supported": False,
         "reason": "per_action_guard_not_verified",
     }
