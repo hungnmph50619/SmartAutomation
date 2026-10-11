@@ -68,7 +68,13 @@ def export(task: str, desktop: Path | None = None) -> Path:
         if total > MAX_ARCHIVE_INPUT_BYTES:
             raise ValueError("Diagnostic bundle exceeds 300 MiB limit")
         selected.append((file, rel))
-    if not selected:
+    process_dir = Path(os.environ.get("SMARTAUTOMATION_PROCESS_LOGS", str(Path.home() / ".smartautomation" / "process_logs")))
+    process_files = []
+    for suffix in (".stdout.log", ".stderr.log"):
+        candidate = process_dir / (task + suffix)
+        if candidate.is_file() and not candidate.is_symlink() and candidate.stat().st_size <= MAX_FILE_BYTES:
+            process_files.append(candidate)
+    if not selected and not process_files:
         raise FileNotFoundError("No eligible diagnostic files")
     with zipfile.ZipFile(destination, "x", compression=zipfile.ZIP_DEFLATED) as archive:
         for file, rel in selected:
@@ -77,6 +83,8 @@ def export(task: str, desktop: Path | None = None) -> Path:
                 archive.writestr(str(rel).replace("\\", "/"), redact(data))
             else:
                 archive.write(file, arcname=str(rel).replace("\\", "/"))
+        for file in process_files:
+            archive.writestr("process/" + file.name, redact(file.read_text(encoding="utf-8", errors="replace")))
         archive.writestr("README-PRIVACY.txt",
                          "Complete per-task UFO logs, including request.log and response.log, are included.\n"
                          "Common credential patterns were redacted in text; this is not a guarantee.\n"
