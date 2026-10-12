@@ -179,6 +179,19 @@ class JobManager:
                     if not checked["verified"]:
                         saved["save_target_verified"] = False
                         saved["save_target_status"] = "docx_content_mismatch"
+            # Separate path/structure evidence from a true content-level verdict.
+            # Without an explicit expected-content contract the task is not fully verified.
+            if job.save_target is None:
+                saved["output_verification_status"] = "no_explicit_target"
+            elif not saved["save_target_verified"]:
+                saved["output_verification_status"] = "failed"
+            elif job.save_target.suffix.lower() == ".docx":
+                saved["output_verification_status"] = (
+                    "verified" if saved.get("content_verified") is True
+                    else "content_not_specified"
+                )
+            else:
+                saved["output_verification_status"] = "path_only"
             if job.save_target and not saved["save_target_verified"] and not job.stop_requested:
                 job.state = "failed"
             job.detail = ("Requested output file missing or empty at target path; task not verified" if job.save_target and not saved["save_target_verified"] and not job.stop_requested else
