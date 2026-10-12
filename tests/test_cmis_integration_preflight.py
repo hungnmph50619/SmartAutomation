@@ -35,7 +35,7 @@ class ReusePreflightTests(unittest.TestCase):
             self.assertFalse(reviewed["desktop_actions_executed"])
             self.assertEqual(reviewed["operator_backend"], "microsoft_ufo")
             self.assertIn("smartautomation.event_store", reviewed["existing_modules"]["events"])
-            with self.assertRaises(ValueError):
+            with self.assertRaises(FileNotFoundError):
                 inspect_cmis_integration(candidate, Path(directory) / "missing.json")
             candidate.write_text(candidate.read_text(encoding="utf-8") + " ", encoding="utf-8")
             with self.assertRaises(ValueError):
