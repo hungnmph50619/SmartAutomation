@@ -205,6 +205,9 @@ class JobManager:
             saved["recovery_status"] = recovery["status"]
             saved["recovery_reason_code"] = recovery["reason_code"]
             saved["recovery_next_step"] = recovery["next_step"]
+            self.events.save_output_checkpoint(
+                job.id, saved["output_verification_status"], recovery["reason_code"]
+            )
             self.events.emit(job.id, job.state, {"returncode": rc, **outcome, **trajectory, "handoff_failure": guard_reason, **saved})
 
     def retry_from_failed(self, job_id: str, app_name: str, confirmed: bool) -> dict:
