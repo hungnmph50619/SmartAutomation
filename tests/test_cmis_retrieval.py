@@ -20,7 +20,8 @@ class RetrievalTests(unittest.TestCase):
                 "execution_allowed": False,
                 "observed_steps": [{
                     "source_action_id": "33333333-3333-3333-3333-333333333333",
-                    "review_decision": "confirmed", "business_outcome": "unknown"
+                    "review_decision": "confirmed", "business_outcome": "unknown",
+                    "observed_process": "notepad.exe"
                 }],
             }
             candidate.write_text(json.dumps(data), encoding="utf-8")
@@ -28,7 +29,11 @@ class RetrievalTests(unittest.TestCase):
             no_context = retrieve_evidence(candidate, approval, {})
             self.assertEqual(no_context["status"], "insufficient_current_observation")
             observed = retrieve_evidence(candidate, approval, {"observed_process": "notepad.exe"})
-            self.assertEqual(observed["matches"], [])
+            self.assertEqual(len(observed["matches"]), 1)
+            self.assertEqual(observed["matches"][0]["match_basis"], "observed_process_only")
+            self.assertIsNone(observed["matches"][0]["action_suggestion"])
+            mismatch = retrieve_evidence(candidate, approval, {"observed_process": "calc.exe"})
+            self.assertEqual(mismatch["matches"], [])
             self.assertFalse(observed["execution_allowed"])
             self.assertTrue(observed["requires_fresh_grounding"])
             data["observed_steps"].append(data["observed_steps"][0])
