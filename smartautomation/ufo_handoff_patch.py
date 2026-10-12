@@ -9,7 +9,6 @@ Does not change Windows security, UFO shell policies, or other tools.
 from __future__ import annotations
 
 import argparse
-import hashlib
 from pathlib import Path
 
 RELATIVE_PATH = Path("ufo/agents/processors/strategies/host_agent_processing_strategy.py")
@@ -66,12 +65,16 @@ def modify(root: Path, restore: bool = False) -> str:
         return "restored"
     if MARKER.encode() in raw:
         return "already_applied"
-    text = raw.decode("utf-8")
+    original_text = raw.decode("utf-8")
+    text = original_text.replace("\r\n", "\n")
     if text.count(OLD) != 1:
         raise RuntimeError("Unsupported UFO source revision; no changes made")
     if backup.exists():
         raise RuntimeError("Existing backup needs manual review; no changes made")
-    updated = text.replace(OLD, NEW).encode("utf-8")
+    updated_text = text.replace(OLD, NEW)
+    if "\r\n" in original_text:
+        updated_text = updated_text.replace("\n", "\r\n")
+    updated = updated_text.encode("utf-8")
     backup.write_bytes(raw)
     try:
         source.write_bytes(updated)
