@@ -2,7 +2,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from smartautomation.docx_verification import verify_docx, verify_docx_package
+from smartautomation.docx_verification import verify_docx, verify_docx_package, expected_text_from_request
 
 
 def make_docx(path: Path, value: str):
@@ -15,6 +15,15 @@ def make_docx(path: Path, value: str):
 
 
 class DocxVerificationTests(unittest.TestCase):
+    def test_explicit_expected_text_contract(self):
+        self.assertEqual(expected_text_from_request(
+            "Save report.docx to Desktop [DOCX_EXPECTED_TEXT]Hello World[/DOCX_EXPECTED_TEXT]"
+        ), "Hello World")
+        self.assertIsNone(expected_text_from_request("Create report.docx about Hello World"))
+        self.assertIsNone(expected_text_from_request(
+            "[DOCX_EXPECTED_TEXT] [/DOCX_EXPECTED_TEXT]"
+        ))
+
     def test_structural_check_rejects_fake_docx(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "fake.docx"
