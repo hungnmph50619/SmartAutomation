@@ -24,6 +24,13 @@ class DocxVerificationTests(unittest.TestCase):
             "[DOCX_EXPECTED_TEXT] [/DOCX_EXPECTED_TEXT]"
         ))
 
+    def test_ambiguous_content_markers_rejected(self):
+        valid = "[DOCX_EXPECTED_TEXT]alpha[/DOCX_EXPECTED_TEXT]"
+        self.assertIsNone(expected_text_from_request(valid + valid))
+        self.assertIsNone(expected_text_from_request(valid + "[DOCX_EXPECTED_TEXT]orphan"))
+        self.assertIsNone(expected_text_from_request(valid + "[/DOCX_EXPECTED_TEXT]"))
+        self.assertEqual(expected_text_from_request(valid), "alpha")
+
     def test_structural_check_rejects_fake_docx(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "fake.docx"
