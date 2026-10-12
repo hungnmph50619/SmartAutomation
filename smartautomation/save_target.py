@@ -29,7 +29,19 @@ def requested_save_target(request: str, home: Path | None = None) -> Path | None
     return root / ("Desktop" if desktop else "Documents") / name
 
 
-def assess_saved_target(target: Path | None) -> dict:
+def snapshot_saved_target(target: Path | None) -> tuple[int, int, int] | None:
+    """Capture filesystem evidence before starting UFO; never modify the file."""
+    if target is None or target.is_symlink():
+        return None
+    try:
+        stat = target.stat()
+        return (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns) if target.is_file() else None
+    except OSError:
+        return None
+
+
+def assess_saved_target(target: Path | None, before: tuple[int, int, int] | None = None,
+                        require_fresh: bool = False) -> dict:
     result = {"save_target_verified": False, "save_target_status": "unknown_target", "save_target_path": None}
     if target is None:
         return result
@@ -39,7 +51,11 @@ def assess_saved_target(target: Path | None) -> dict:
     elif target.stat().st_size == 0:
         result["save_target_status"] = "empty_target_file"
     else:
-        result.update({"save_target_verified": True, "save_target_status": "file_exists_at_requested_path"})
+        after = snapshot_saved_target(target)
+        if require_fresh and before is not None and after == before:
+            result["save_target_status"] = "preexisting_file_unchanged"
+        else:
+            result.update({"save_target_verified": True, "save_target_status": "file_exists_at_requested_path"})
     return result
 
 
