@@ -46,3 +46,32 @@ def recovery_instructions(candidate: dict, failure: dict) -> dict:
         ),
         "application": {"name": name, "app_id": app_id},
     }
+
+
+def classify_output_recovery(evidence: dict) -> dict:
+    """Advisory-only recovery decision from independent output evidence.
+
+    Preserve previously verified work. Never replay actions or guess a file path.
+    """
+    status = evidence.get("output_verification_status")
+    target_status = evidence.get("save_target_status")
+    if status == "verified":
+        return {"status": "not_needed", "reason_code": "output_verified",
+                "next_step": None, "preserve_existing_progress": True}
+    if status == "no_explicit_target":
+        return {"status": "manual_review", "reason_code": "target_unknown",
+                "next_step": "clarify_expected_output_path", "preserve_existing_progress": True}
+    if target_status in {"missing_target_file", "preexisting_file_unchanged"}:
+        return {"status": "review_required", "reason_code": "target_missing_or_stale",
+                "next_step": "inspect_ufo_save_as_evidence_before_targeted_retry",
+                "preserve_existing_progress": True}
+    if target_status == "invalid_docx_package":
+        return {"status": "review_required", "reason_code": "invalid_output_package",
+                "next_step": "inspect_document_before_targeted_retry",
+                "preserve_existing_progress": True}
+    if target_status == "docx_content_mismatch":
+        return {"status": "review_required", "reason_code": "content_mismatch",
+                "next_step": "inspect_missing_content_before_targeted_retry",
+                "preserve_existing_progress": True}
+    return {"status": "manual_review", "reason_code": "insufficient_output_evidence",
+            "next_step": "inspect_output_evidence", "preserve_existing_progress": True}
