@@ -19,6 +19,7 @@ from smartautomation.event_store import EventStore
 from smartautomation.telemetry import trace_phase
 from smartautomation.outcome_evidence import classify_process_outcome
 from smartautomation.trajectory_evidence import assess_trajectory
+from smartautomation.window_discovery import discover_visible_processes, guide_existing_window
 
 MAX_SECONDS = 900
 
@@ -84,7 +85,10 @@ class JobManager:
             job = Job(str(uuid.uuid4()), "starting", time.time(), request=request.strip())
             self._job = job
             self.events.emit(job.id, "created")
-            command = build_command(config, "smartautomation-" + job.id[:8], request.strip())
+            # Generic read-only hints; UFO remains the sole desktop actor.
+            # This is advisory until upstream action selection is verified live.
+            guided_request = guide_existing_window(request.strip(), discover_visible_processes())
+            command = build_command(config, "smartautomation-" + job.id[:8], guided_request)
             try:
                 log_dir = Path(os.environ.get('SMARTAUTOMATION_PROCESS_LOGS', str(Path.home() / '.smartautomation' / 'process_logs')))
                 log_dir.mkdir(parents=True, exist_ok=True)
