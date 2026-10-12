@@ -7,6 +7,7 @@ Never includes application configuration files or files outside the task folder.
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import datetime
 from pathlib import Path
 import os
@@ -54,6 +55,7 @@ def export(task: str, desktop: Path | None = None) -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     destination = desktop / f"SmartAutomation-Diagnostic-{task[-8:]}-{stamp}.zip"
     selected = []
+    skipped = []
     total = 0
     for file in sorted(folder.rglob("*")):
         if not file.is_file() or file.is_symlink():
@@ -63,10 +65,12 @@ def export(task: str, desktop: Path | None = None) -> Path:
             continue
         size = file.stat().st_size
         if size > MAX_FILE_BYTES:
-            raise ValueError(f"Diagnostic file exceeds size limit: {rel}")
+            skipped.append({"path": rel.as_posix(), "reason": "file_size_limit", "size_bytes": size})
+            continue
+        if total + size > MAX_ARCHIVE_INPUT_BYTES:
+            skipped.append({"path": rel.as_posix(), "reason": "bundle_size_limit", "size_bytes": size})
+            continue
         total += size
-        if total > MAX_ARCHIVE_INPUT_BYTES:
-            raise ValueError("Diagnostic bundle exceeds 300 MiB limit")
         selected.append((file, rel))
     process_dir = Path(os.environ.get("SMARTAUTOMATION_PROCESS_LOGS", str(Path.home() / ".smartautomation" / "process_logs")))
     process_files = []
@@ -74,7 +78,7 @@ def export(task: str, desktop: Path | None = None) -> Path:
         candidate = process_dir / (task + suffix)
         if candidate.is_file() and not candidate.is_symlink() and candidate.stat().st_size <= MAX_FILE_BYTES:
             process_files.append(candidate)
-    if not selected and not process_files:
+    if not selected and not process_files and not skipped:
         raise FileNotFoundError("No eligible diagnostic files")
     with zipfile.ZipFile(destination, "x", compression=zipfile.ZIP_DEFLATED) as archive:
         for file, rel in selected:
@@ -85,8 +89,9 @@ def export(task: str, desktop: Path | None = None) -> Path:
                 archive.write(file, arcname=str(rel).replace("\\", "/"))
         for file in process_files:
             archive.writestr("process/" + file.name, redact(file.read_text(encoding="utf-8", errors="replace")))
+        archive.writestr("EXPORT-MANIFEST.json", json.dumps({"partial": bool(skipped), "skipped": skipped, "included_count": len(selected) + len(process_files)}, ensure_ascii=False, indent=2))
         archive.writestr("README-PRIVACY.txt",
-                         "Complete per-task UFO logs, including request.log and response.log, are included.\n"
+                         "Per-task UFO logs are included when within size limits; consult EXPORT-MANIFEST.json for omissions.\n"
                          "Common credential patterns were redacted in text; this is not a guarantee.\n"
                          "Screenshots and other binary files are NOT redacted. Review before sharing.\n"
                          "Application configuration and credentials files are excluded.\n")
