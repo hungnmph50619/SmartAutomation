@@ -22,6 +22,7 @@ from smartautomation.trajectory_evidence import assess_trajectory
 from smartautomation.window_discovery import discover_visible_processes, guide_existing_window
 from smartautomation.handoff_guard import detect_uninitialized_ui_loop
 from smartautomation.launch_capabilities import discover_launch_context, guide_application_launch
+from smartautomation.save_target import requested_save_target, assess_saved_target, guide_save_target
 
 MAX_SECONDS = 900
 
@@ -45,6 +46,7 @@ class Job:
     returncode: int | None = None
     stop_requested: bool = False
     request: str = field(default="", repr=False)
+    save_target: Path | None = field(default=None, repr=False)
 
 
 class JobManager:
@@ -84,7 +86,8 @@ class JobManager:
         with self._lock:
             if self._job and self._job.state in {"starting", "running", "stopping"}:
                 raise RuntimeError("Another desktop task is already running")
-            job = Job(str(uuid.uuid4()), "starting", time.time(), request=request.strip())
+            job = Job(str(uuid.uuid4()), "starting", time.time(), request=request.strip(),
+                      save_target=requested_save_target(request.strip()))
             self._job = job
             self.events.emit(job.id, "created")
             # Generic read-only hints; UFO remains the sole desktop actor.
@@ -93,6 +96,7 @@ class JobManager:
             guided_request = guide_application_launch(
                 guided_request, discover_launch_context(request.strip())
             )
+            guided_request = guide_save_target(guided_request, job.save_target)
             command = build_command(config, "smartautomation-" + job.id[:8], guided_request)
             try:
                 log_dir = Path(os.environ.get('SMARTAUTOMATION_PROCESS_LOGS', str(Path.home() / '.smartautomation' / 'process_logs')))
@@ -155,12 +159,16 @@ class JobManager:
             stderr_path = process_dir / ("smartautomation-" + job.id[:8] + ".stderr.log")
             outcome = classify_process_outcome(rc, stderr_path)
             trajectory = assess_trajectory(UfoConfig.from_environment().root / "logs" / ("smartautomation-" + job.id[:8]))
-            job.detail = ("UFO UI handoff loop detected; task stopped before further failed actions" if guard_reason else
+            saved = assess_saved_target(job.save_target)
+            if job.save_target and not saved["save_target_verified"] and not job.stop_requested:
+                job.state = "failed"
+            job.detail = ("Requested output file missing or empty at target path; task not verified" if job.save_target and not saved["save_target_verified"] and not job.stop_requested else
+                          ("UFO UI handoff loop detected; task stopped before further failed actions" if guard_reason else
                           ("UFO evaluator contradicted by failed actions; task not verified"
                           if trajectory["evaluator_conflict"] else
                           ("UFO process exited; task not independently verified"
-                           if rc == 0 else "UFO process failed; see diagnostic ZIP")))
-            self.events.emit(job.id, job.state, {"returncode": rc, **outcome, **trajectory, "handoff_failure": guard_reason})
+                           if rc == 0 else "UFO process failed; see diagnostic ZIP"))))
+            self.events.emit(job.id, job.state, {"returncode": rc, **outcome, **trajectory, "handoff_failure": guard_reason, **saved})
 
     def retry_from_failed(self, job_id: str, app_name: str, confirmed: bool) -> dict:
         """Start a NEW approved UFO job, never execute desktop commands here."""
