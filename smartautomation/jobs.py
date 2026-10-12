@@ -20,6 +20,7 @@ from smartautomation.telemetry import trace_phase
 from smartautomation.outcome_evidence import classify_process_outcome
 from smartautomation.trajectory_evidence import assess_trajectory
 from smartautomation.window_discovery import discover_visible_processes, guide_existing_window
+from smartautomation.handoff_guard import detect_uninitialized_ui_loop
 
 MAX_SECONDS = 900
 
@@ -117,29 +118,45 @@ class JobManager:
 
     def _watch(self, job: Job):
         assert job.process is not None
-        try:
-            with trace_phase("ufo.process.wait", job_id=job.id, phase="running"):
-                rc = job.process.wait(timeout=MAX_SECONDS)
-        except subprocess.TimeoutExpired:
-            with self._lock:
-                job.stop_requested = True
-                job.state = "stopping"
-                self.events.emit(job.id, "timeout")
-                job.detail = "Time limit reached: stopping UFO"
-            self._terminate_tree(job.process)
-            rc = job.process.wait()
+        guard_reason = None
+        deadline = time.monotonic() + MAX_SECONDS
+        with trace_phase("ufo.process.wait", job_id=job.id, phase="running"):
+            while True:
+                try:
+                    rc = job.process.wait(timeout=min(3, max(0.1, deadline - time.monotonic())))
+                    break
+                except subprocess.TimeoutExpired:
+                    folder = UfoConfig.from_environment().root / "logs" / ("smartautomation-" + job.id[:8])
+                    guard = detect_uninitialized_ui_loop(folder)
+                    if guard["detected"]:
+                        guard_reason = guard["reason_code"]
+                        self.events.emit(job.id, "handoff_guard_triggered",
+                                         {"reason_code": guard_reason, "occurrences": guard["occurrences"]})
+                        self._terminate_tree(job.process)
+                        rc = job.process.wait()
+                        break
+                    if time.monotonic() >= deadline:
+                        with self._lock:
+                            job.stop_requested = True
+                            job.state = "stopping"
+                            self.events.emit(job.id, "timeout")
+                            job.detail = "Time limit reached: stopping UFO"
+                        self._terminate_tree(job.process)
+                        rc = job.process.wait()
+                        break
         with self._lock:
             job.returncode = rc
-            job.state = "stopped" if job.stop_requested else ("finished" if rc == 0 else "failed")
+            job.state = "failed" if guard_reason else ("stopped" if job.stop_requested else ("finished" if rc == 0 else "failed"))
             process_dir = Path(os.environ.get("SMARTAUTOMATION_PROCESS_LOGS", str(Path.home() / ".smartautomation" / "process_logs")))
             stderr_path = process_dir / ("smartautomation-" + job.id[:8] + ".stderr.log")
             outcome = classify_process_outcome(rc, stderr_path)
             trajectory = assess_trajectory(UfoConfig.from_environment().root / "logs" / ("smartautomation-" + job.id[:8]))
-            job.detail = ("UFO evaluator contradicted by failed actions; task not verified"
+            job.detail = ("UFO UI handoff loop detected; task stopped before further failed actions" if guard_reason else
+                          ("UFO evaluator contradicted by failed actions; task not verified"
                           if trajectory["evaluator_conflict"] else
                           ("UFO process exited; task not independently verified"
-                           if rc == 0 else "UFO process failed; see diagnostic ZIP"))
-            self.events.emit(job.id, job.state, {"returncode": rc, **outcome, **trajectory})
+                           if rc == 0 else "UFO process failed; see diagnostic ZIP")))
+            self.events.emit(job.id, job.state, {"returncode": rc, **outcome, **trajectory, "handoff_failure": guard_reason})
 
     def retry_from_failed(self, job_id: str, app_name: str, confirmed: bool) -> dict:
         """Start a NEW approved UFO job, never execute desktop commands here."""
