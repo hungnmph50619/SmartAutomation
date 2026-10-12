@@ -17,8 +17,8 @@ class OversizedDiagnosticTests(unittest.TestCase):
             task = "smartautomation-1234abcd"
             folder = ufo / "logs" / task
             folder.mkdir(parents=True)
-            (folder / "request.log").write_text("large", encoding="utf-8")
-            (folder / "response.log").write_text("action evidence", encoding="utf-8")
+            (folder / "request.log").write_text("oversized request payload", encoding="utf-8")
+            (folder / "response.log").write_text("ok", encoding="utf-8")
             with patch("smartautomation.export_diagnostics.MAX_FILE_BYTES", 8), patch(
                 "smartautomation.export_diagnostics.UfoConfig.from_environment",
                 return_value=UfoConfig(ufo)
