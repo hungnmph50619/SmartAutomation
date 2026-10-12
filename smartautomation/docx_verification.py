@@ -57,6 +57,39 @@ def verify_docx(path: Path, expected_text: str) -> dict:
     return report
 
 
+def verify_docx_package(path: Path) -> dict:
+    """Read-only structural check; success here never proves requested content."""
+    result = {"package_valid": False, "package_status": "not_checked"}
+    if path.is_symlink() or not path.is_file():
+        result["package_status"] = "file_missing"
+        return result
+    if path.suffix.lower() != ".docx":
+        result["package_status"] = "not_docx_extension"
+        return result
+    if path.stat().st_size > MAX_DOCX_BYTES:
+        result["package_status"] = "file_too_large"
+        return result
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = set(archive.namelist())
+            if "[Content_Types].xml" not in names or "word/document.xml" not in names:
+                result["package_status"] = "invalid_docx_package"
+                return result
+            info = archive.getinfo("word/document.xml")
+            if info.file_size > MAX_XML_BYTES:
+                result["package_status"] = "document_xml_too_large"
+                return result
+            document = ET.fromstring(archive.read(info))
+            if document.tag != WORD_NS + "document":
+                result["package_status"] = "invalid_document_root"
+                return result
+    except (OSError, ValueError, zipfile.BadZipFile, ET.ParseError, RuntimeError):
+        result["package_status"] = "unreadable_docx"
+        return result
+    result.update(package_valid=True, package_status="valid_docx_package")
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--file", required=True, type=Path)
