@@ -22,7 +22,7 @@ from smartautomation.trajectory_evidence import assess_trajectory
 from smartautomation.window_discovery import discover_visible_processes, guide_existing_window
 from smartautomation.handoff_guard import detect_uninitialized_ui_loop
 from smartautomation.launch_capabilities import discover_launch_context, guide_application_launch
-from smartautomation.save_target import requested_save_target, assess_saved_target, guide_save_target
+from smartautomation.save_target import requested_save_target, assess_saved_target, guide_save_target, snapshot_saved_target
 
 MAX_SECONDS = 900
 
@@ -47,6 +47,7 @@ class Job:
     stop_requested: bool = False
     request: str = field(default="", repr=False)
     save_target: Path | None = field(default=None, repr=False)
+    save_target_before: tuple[int, int, int] | None = field(default=None, repr=False)
 
 
 class JobManager:
@@ -88,6 +89,7 @@ class JobManager:
                 raise RuntimeError("Another desktop task is already running")
             job = Job(str(uuid.uuid4()), "starting", time.time(), request=request.strip(),
                       save_target=requested_save_target(request.strip()))
+            job.save_target_before = snapshot_saved_target(job.save_target)
             self._job = job
             self.events.emit(job.id, "created")
             # Generic read-only hints; UFO remains the sole desktop actor.
@@ -159,7 +161,7 @@ class JobManager:
             stderr_path = process_dir / ("smartautomation-" + job.id[:8] + ".stderr.log")
             outcome = classify_process_outcome(rc, stderr_path)
             trajectory = assess_trajectory(UfoConfig.from_environment().root / "logs" / ("smartautomation-" + job.id[:8]))
-            saved = assess_saved_target(job.save_target)
+            saved = assess_saved_target(job.save_target, before=job.save_target_before, require_fresh=True)
             if job.save_target and not saved["save_target_verified"] and not job.stop_requested:
                 job.state = "failed"
             job.detail = ("Requested output file missing or empty at target path; task not verified" if job.save_target and not saved["save_target_verified"] and not job.stop_requested else
