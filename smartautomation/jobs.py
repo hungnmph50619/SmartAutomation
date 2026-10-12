@@ -21,6 +21,7 @@ from smartautomation.outcome_evidence import classify_process_outcome
 from smartautomation.trajectory_evidence import assess_trajectory
 from smartautomation.window_discovery import discover_visible_processes, guide_existing_window
 from smartautomation.handoff_guard import detect_uninitialized_ui_loop
+from smartautomation.launch_capabilities import discover_launch_context, guide_application_launch
 
 MAX_SECONDS = 900
 
@@ -89,6 +90,9 @@ class JobManager:
             # Generic read-only hints; UFO remains the sole desktop actor.
             # This is advisory until upstream action selection is verified live.
             guided_request = guide_existing_window(request.strip(), discover_visible_processes())
+            guided_request = guide_application_launch(
+                guided_request, discover_launch_context(request.strip())
+            )
             command = build_command(config, "smartautomation-" + job.id[:8], guided_request)
             try:
                 log_dir = Path(os.environ.get('SMARTAUTOMATION_PROCESS_LOGS', str(Path.home() / '.smartautomation' / 'process_logs')))
