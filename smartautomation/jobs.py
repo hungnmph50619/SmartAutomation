@@ -24,6 +24,7 @@ from smartautomation.handoff_guard import detect_uninitialized_ui_loop
 from smartautomation.launch_capabilities import discover_launch_context, guide_application_launch
 from smartautomation.save_target import requested_save_target, assess_saved_target, guide_save_target, snapshot_saved_target
 from smartautomation.docx_verification import verify_docx_package, verify_docx, expected_text_from_request
+from smartautomation.recovery import classify_output_recovery
 
 MAX_SECONDS = 900
 
@@ -200,6 +201,10 @@ class JobManager:
                           if trajectory["evaluator_conflict"] else
                           ("UFO process exited; task not independently verified"
                            if rc == 0 else "UFO process failed; see diagnostic ZIP"))))
+            recovery = classify_output_recovery(saved)
+            saved["recovery_status"] = recovery["status"]
+            saved["recovery_reason_code"] = recovery["reason_code"]
+            saved["recovery_next_step"] = recovery["next_step"]
             self.events.emit(job.id, job.state, {"returncode": rc, **outcome, **trajectory, "handoff_failure": guard_reason, **saved})
 
     def retry_from_failed(self, job_id: str, app_name: str, confirmed: bool) -> dict:
