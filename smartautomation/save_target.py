@@ -9,7 +9,7 @@ import os
 import re
 from pathlib import Path
 
-FILENAME = re.compile(r"(?<![\w.])([A-Za-z0-9][A-Za-z0-9 _.-]{0,110}\.(?:docx|xlsx|pptx|pdf|txt))\b",re.I)
+FILENAME = re.compile(r"(?<![\\w.])([A-Za-z0-9][A-Za-z0-9_.-]{0,110}\\.(?:docx|xlsx|pptx|pdf|txt))\\b", re.I)
 
 
 def requested_save_target(request: str, home: Path | None = None) -> Path | None:
