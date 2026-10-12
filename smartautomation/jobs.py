@@ -18,6 +18,7 @@ from smartautomation.ufo import UfoConfig, build_command
 from smartautomation.event_store import EventStore
 from smartautomation.telemetry import trace_phase
 from smartautomation.outcome_evidence import classify_process_outcome
+from smartautomation.trajectory_evidence import assess_trajectory
 
 MAX_SECONDS = 900
 
@@ -129,9 +130,12 @@ class JobManager:
             process_dir = Path(os.environ.get("SMARTAUTOMATION_PROCESS_LOGS", str(Path.home() / ".smartautomation" / "process_logs")))
             stderr_path = process_dir / ("smartautomation-" + job.id[:8] + ".stderr.log")
             outcome = classify_process_outcome(rc, stderr_path)
-            job.detail = ("UFO process exited; task not independently verified"
-                          if rc == 0 else "UFO process failed; see diagnostic ZIP")
-            self.events.emit(job.id, job.state, {"returncode": rc, **outcome})
+            trajectory = assess_trajectory(UfoConfig.from_environment().root / "logs" / ("smartautomation-" + job.id[:8]))
+            job.detail = ("UFO evaluator contradicted by failed actions; task not verified"
+                          if trajectory["evaluator_conflict"] else
+                          ("UFO process exited; task not independently verified"
+                           if rc == 0 else "UFO process failed; see diagnostic ZIP"))
+            self.events.emit(job.id, job.state, {"returncode": rc, **outcome, **trajectory})
 
     def retry_from_failed(self, job_id: str, app_name: str, confirmed: bool) -> dict:
         """Start a NEW approved UFO job, never execute desktop commands here."""
