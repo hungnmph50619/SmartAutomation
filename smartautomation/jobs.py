@@ -23,7 +23,7 @@ from smartautomation.window_discovery import discover_visible_processes, guide_e
 from smartautomation.handoff_guard import detect_uninitialized_ui_loop
 from smartautomation.launch_capabilities import discover_launch_context, guide_application_launch
 from smartautomation.save_target import requested_save_target, assess_saved_target, guide_save_target, snapshot_saved_target
-from smartautomation.docx_verification import verify_docx_package
+from smartautomation.docx_verification import verify_docx_package, verify_docx, expected_text_from_request
 
 MAX_SECONDS = 900
 
@@ -169,6 +169,16 @@ class JobManager:
                 if not package["package_valid"]:
                     saved["save_target_verified"] = False
                     saved["save_target_status"] = "invalid_docx_package"
+            if job.save_target and job.save_target.suffix.lower() == ".docx":
+                expected = expected_text_from_request(job.request)
+                saved["content_check_status"] = "not_specified" if expected is None else "not_checked"
+                if expected is not None and saved["save_target_verified"]:
+                    checked = verify_docx(job.save_target, expected)
+                    saved["content_check_status"] = checked["status"]
+                    saved["content_verified"] = checked["verified"]
+                    if not checked["verified"]:
+                        saved["save_target_verified"] = False
+                        saved["save_target_status"] = "docx_content_mismatch"
             if job.save_target and not saved["save_target_verified"] and not job.stop_requested:
                 job.state = "failed"
             job.detail = ("Requested output file missing or empty at target path; task not verified" if job.save_target and not saved["save_target_verified"] and not job.stop_requested else
