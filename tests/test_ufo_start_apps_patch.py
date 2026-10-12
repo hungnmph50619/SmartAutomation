@@ -14,7 +14,7 @@ class StartAppsUfoPatchTests(unittest.TestCase):
             root = Path(folder)
             source = root / RELATIVE_PATH
             source.parent.mkdir(parents=True)
-            source.write_text("def host():\n" + ANCHOR + "\n", encoding="utf-8")
+            source.write_text("def host():\n" + ANCHOR + "\ndef app():\n    pass\n", encoding="utf-8")
             before = source.read_bytes()
             self.assertEqual(modify(root), "applied")
             current = source.read_text(encoding="utf-8")
