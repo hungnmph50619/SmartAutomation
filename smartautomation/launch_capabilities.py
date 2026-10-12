@@ -54,7 +54,7 @@ def guide_application_launch(request: str, candidates: list[dict[str, str]], *, 
     """Append bounded generic UI launch strategy if it fits UFO CLI input budget."""
     guidance = (
         "Neu chua tim thay cua so ung dung dich, KHONG ket luan that bai hay hoan thanh ngay. "
-        "Hay dung cac cong cu UFO de tim ung dung qua Windows Start Menu, mo no qua UI hop le, "
+        "Neu HostUIExecutor co discover_installed_applications va launch_installed_application, hay dung chung de tim va mo ung dung Windows Start Apps; neu khong co, dung giao dien Windows Start Menu hop le, "
         "doi cua so xuat hien, quan sat lai va chon bang HostUIExecutor truoc khi dung AppUIExecutor. "
         "Khong doan ten lenh shell, khong vuot qua policy; neu mo that bai, thu con duong UI khac, "
         "xac minh tung buoc va bao that bai neu khong co bang chung. "
