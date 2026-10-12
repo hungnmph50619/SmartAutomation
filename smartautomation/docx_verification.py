@@ -60,13 +60,14 @@ def verify_docx(path: Path, expected_text: str) -> dict:
 
 def expected_text_from_request(request: str) -> str | None:
     """Only accept an explicit, bounded exact-content contract; never guess."""
-    match = re.search(
-        r"\[DOCX_EXPECTED_TEXT\]([\s\S]*?)\[/DOCX_EXPECTED_TEXT\]",
-        request, re.IGNORECASE,
-    )
-    if not match:
+    pattern = r"\[DOCX_EXPECTED_TEXT\]([\s\S]*?)\[/DOCX_EXPECTED_TEXT\]"
+    matches = list(re.finditer(pattern, request, re.IGNORECASE))
+    # Ambiguous, repeated or unpaired markers must not silently select a subset.
+    opens = len(re.findall(r"\[DOCX_EXPECTED_TEXT\]", request, re.IGNORECASE))
+    closes = len(re.findall(r"\[/DOCX_EXPECTED_TEXT\]", request, re.IGNORECASE))
+    if len(matches) != 1 or opens != 1 or closes != 1:
         return None
-    value = match.group(1).strip()
+    value = matches[0].group(1).strip()
     return value if 0 < len(value) <= 4000 else None
 
 
