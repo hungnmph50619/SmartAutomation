@@ -61,7 +61,7 @@ def verify_docx(path: Path, expected_text: str) -> dict:
 def expected_text_from_request(request: str) -> str | None:
     """Only accept an explicit, bounded exact-content contract; never guess."""
     match = re.search(
-        r"\\[DOCX_EXPECTED_TEXT\\]([\\s\\S]*?)\\[/DOCX_EXPECTED_TEXT\\]",
+        r"\[DOCX_EXPECTED_TEXT\]([\s\S]*?)\[/DOCX_EXPECTED_TEXT\]",
         request, re.IGNORECASE,
     )
     if not match:
