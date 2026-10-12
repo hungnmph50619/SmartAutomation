@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 import zipfile
 from xml.etree import ElementTree as ET
@@ -55,6 +56,18 @@ def verify_docx(path: Path, expected_text: str) -> dict:
     report["verified"] = report["expected_text_matched"]
     report["status"] = "verified" if report["verified"] else "content_mismatch"
     return report
+
+
+def expected_text_from_request(request: str) -> str | None:
+    """Only accept an explicit, bounded exact-content contract; never guess."""
+    match = re.search(
+        r"\\[DOCX_EXPECTED_TEXT\\]([\\s\\S]*?)\\[/DOCX_EXPECTED_TEXT\\]",
+        request, re.IGNORECASE,
+    )
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value if 0 < len(value) <= 4000 else None
 
 
 def verify_docx_package(path: Path) -> dict:
