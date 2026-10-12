@@ -2,7 +2,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from smartautomation.docx_verification import verify_docx
+from smartautomation.docx_verification import verify_docx, verify_docx_package
 
 
 def make_docx(path: Path, value: str):
@@ -15,6 +15,20 @@ def make_docx(path: Path, value: str):
 
 
 class DocxVerificationTests(unittest.TestCase):
+    def test_structural_check_rejects_fake_docx(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "fake.docx"
+            path.write_bytes(b"not really a Word document")
+            self.assertFalse(verify_docx_package(path)["package_valid"])
+
+    def test_structural_check_accepts_real_package_without_claiming_content(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "valid.docx"
+            make_docx(path, "some other content")
+            result = verify_docx_package(path)
+            self.assertTrue(result["package_valid"])
+            self.assertNotIn("verified", result)
+
     def test_valid_content(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "test.docx"
