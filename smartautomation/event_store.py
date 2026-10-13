@@ -31,6 +31,14 @@ class EventStore:
                 metadata TEXT NOT NULL
             )""")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_job ON events(job_id,id)")
+            conn.execute("""CREATE TABLE IF NOT EXISTS step_checkpoints (
+                job_id TEXT NOT NULL,
+                step_id TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                verification_status TEXT NOT NULL,
+                evidence_code TEXT NOT NULL,
+                PRIMARY KEY (job_id,step_id)
+            )""")
             conn.execute("""CREATE TABLE IF NOT EXISTS output_checkpoints (
                 job_id TEXT PRIMARY KEY,
                 timestamp REAL NOT NULL,
@@ -99,3 +107,51 @@ class EventStore:
             return None
         return {"job_id": job_id, "timestamp": row[0], "output_status": row[1],
                 "recovery_reason": row[2], "can_auto_resume": False}
+
+    def save_step_checkpoint(self, job_id: str, step_id: str, status: str, evidence_code: str) -> None:
+        """Store externally verified step evidence, never inferred UFO actions.
+
+        A verified step cannot be silently downgraded. A later change in UI
+        context requires a separate revalidation protocol, not blind replay.
+        """
+        allowed = {"verified", "failed", "unknown"}
+        codes = {"content_matched", "target_fresh", "package_valid",
+                 "verification_failed", "evidence_missing"}
+        if not isinstance(job_id, str) or not 1 <= len(job_id) <= 80:
+            raise ValueError("Invalid job ID")
+        if not isinstance(step_id, str) or not 1 <= len(step_id) <= 80 or not all(
+            c.isascii() and (c.isalnum() or c in "_-") for c in step_id
+        ):
+            raise ValueError("Invalid step ID")
+        if status not in allowed or evidence_code not in codes:
+            raise ValueError("Unsupported evidence")
+        if (status == "verified") != (evidence_code in {"content_matched", "target_fresh", "package_valid"}):
+            raise ValueError("Evidence does not support verification status")
+        with self._lock, self._connect() as conn:
+            prior = conn.execute(
+                "SELECT verification_status FROM step_checkpoints WHERE job_id=? AND step_id=?",
+                (job_id, step_id),
+            ).fetchone()
+            if prior and prior[0] == "verified" and status != "verified":
+                raise ValueError("Verified step requires explicit revalidation")
+            conn.execute(
+                """INSERT INTO step_checkpoints(job_id,step_id,timestamp,verification_status,evidence_code)
+                   VALUES(?,?,?,?,?)
+                   ON CONFLICT(job_id,step_id) DO UPDATE SET timestamp=excluded.timestamp,
+                   verification_status=excluded.verification_status,evidence_code=excluded.evidence_code""",
+                (job_id, step_id, time.time(), status, evidence_code),
+            )
+
+    def list_step_checkpoints(self, job_id: str) -> list[dict]:
+        """Read-only evidence; never grants permission to automatically resume."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """SELECT step_id,timestamp,verification_status,evidence_code
+                   FROM step_checkpoints WHERE job_id=? ORDER BY step_id""",
+                (job_id,),
+            ).fetchall()
+        return [
+            {"step_id": step_id, "timestamp": timestamp, "status": status,
+             "evidence_code": code, "can_auto_resume": False}
+            for step_id, timestamp, status, code in rows
+        ]
