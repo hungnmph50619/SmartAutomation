@@ -23,6 +23,30 @@ class OutputCheckpointTests(unittest.TestCase):
             self.assertEqual(store.load_output_checkpoint("job-123")["output_status"], "verified")
             self.assertIsNone(store.load_output_checkpoint("unknown"))
 
+    def test_step_checkpoints_survive_restart_and_preserve_verified_steps(self):
+        with tempfile.TemporaryDirectory() as folder:
+            db = Path(folder) / "events.db"
+            store = EventStore(db)
+            store.save_step_checkpoint("job-1", "A", "verified", "target_fresh")
+            store.save_step_checkpoint("job-1", "B", "verified", "content_matched")
+            store.save_step_checkpoint("job-1", "C", "failed", "verification_failed")
+            rows = EventStore(db).list_step_checkpoints("job-1")
+            self.assertEqual([row["status"] for row in rows], ["verified", "verified", "failed"])
+            self.assertTrue(all(not row["can_auto_resume"] for row in rows))
+            with self.assertRaises(ValueError):
+                store.save_step_checkpoint("job-1", "A", "failed", "verification_failed")
+            self.assertEqual(EventStore(db).list_step_checkpoints("job-1")[0]["status"], "verified")
+
+    def test_step_evidence_rejects_unsupported_or_sensitive_inputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = EventStore(Path(folder) / "events.db")
+            with self.assertRaises(ValueError):
+                store.save_step_checkpoint("job", "../secret", "verified", "target_fresh")
+            with self.assertRaises(ValueError):
+                store.save_step_checkpoint("job", "A", "verified", "evidence_missing")
+            with self.assertRaises(ValueError):
+                store.save_step_checkpoint("job", "B", "failed", "content_matched")
+
     def test_rejects_arbitrary_sensitive_metadata(self):
         with tempfile.TemporaryDirectory() as folder:
             store = EventStore(Path(folder) / "events.db")
