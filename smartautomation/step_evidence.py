@@ -8,7 +8,7 @@ from __future__ import annotations
 def output_step_evidence(result: dict) -> list[tuple[str, str, str]]:
     """Return deterministic step IDs, statuses and bounded evidence codes."""
     steps: list[tuple[str, str, str]] = []
-    if result.get("save_target_verified") is True:
+    if result.get("save_target_status") in {"file_exists_at_requested_path", "docx_content_mismatch", "invalid_docx_package"}:
         steps.append(("target", "verified", "target_fresh"))
     elif result.get("save_target_status") in {
         "missing_target_file", "empty_target_file", "preexisting_file_unchanged"
