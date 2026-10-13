@@ -25,6 +25,7 @@ from smartautomation.launch_capabilities import discover_launch_context, guide_a
 from smartautomation.save_target import requested_save_target, assess_saved_target, guide_save_target, snapshot_saved_target
 from smartautomation.docx_verification import verify_docx_package, verify_docx, expected_text_from_request
 from smartautomation.recovery import classify_output_recovery
+from smartautomation.step_evidence import output_step_evidence
 
 MAX_SECONDS = 900
 
@@ -208,6 +209,9 @@ class JobManager:
             self.events.save_output_checkpoint(
                 job.id, saved["output_verification_status"], recovery["reason_code"]
             )
+            # Store only independently assessed artifact facts, not UFO action claims.
+            for step_id, step_status, code in output_step_evidence(saved):
+                self.events.save_step_checkpoint(job.id, step_id, step_status, code)
             self.events.emit(job.id, job.state, {"returncode": rc, **outcome, **trajectory, "handoff_failure": guard_reason, **saved})
 
     def retry_from_failed(self, job_id: str, app_name: str, confirmed: bool) -> dict:
